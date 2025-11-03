@@ -155,36 +155,41 @@ def main():
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
 
+
     # ---- Generate predictions on test.json and save to CSV ----
     print("\nGenerating predictions on test.json...")
 
-    # Get model predictions (logits) for test dataset
+    # run model on test set
     preds = trainer.predict(tokenized_test)
-    logits = preds.predictions
+    logits = preds.predictions  # shape: (num_examples, 2)
 
-    # Convert logits to predicted sentiment labels (0 or 1)
+    # turn logits into probabilities
+    # softmax over axis=1
+    exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))  # for numerical stability
+    probs = exp_logits / exp_logits.sum(axis=1, keepdims=True)  # shape: (num_examples, 2)
+
+    # predicted class = argmax
     predicted_labels = np.argmax(logits, axis=-1)
 
-    # Reload original test.json to get review texts
+    # confidence = probability of the predicted class
+    confidence = probs[np.arange(len(predicted_labels)), predicted_labels]
+
+    # reload original test.json to get texts
     with open(args.test, "r", encoding="utf-8") as f:
         test_records = json.load(f)
 
-    # Make sure lengths match
-    assert len(test_records) == len(predicted_labels), "Mismatch between test samples and predictions!"
+    assert len(test_records) == len(predicted_labels)
 
-    # Create DataFrame of results
     df = pd.DataFrame({
         "review_id": range(len(test_records)),
         "review_text": [r["reviews"] for r in test_records],
-        "predicted_sentiment": predicted_labels
+        "predicted_sentiment": predicted_labels,
+        "confidence": confidence,
     })
 
-    # Save CSV into the same output directory (renamed to results.csv)
     output_csv_path = os.path.join(args.output_dir, "results.csv")
     df.to_csv(output_csv_path, index=False, encoding="utf-8")
-
-    print(f"\n✅ Predictions saved to {output_csv_path}")
-
+    print(f"\n✅ Predictions with confidence saved to {output_csv_path}")
 
 if __name__ == "__main__":
     main()
