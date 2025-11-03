@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_json_dataset(path: str) -> Dataset:
+'''def load_json_dataset(path: str) -> Dataset:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Could not find dataset at {path}")
 
@@ -46,7 +46,18 @@ def load_json_dataset(path: str) -> Dataset:
     labels = [int(record["sentiments"]) for record in records]
 
     return Dataset.from_dict({"text": texts, "label": labels})
+'''
+def load_json_dataset(path, has_labels=True):
+    with open(path) as f:
+        records = json.load(f)
 
+    texts = [record["reviews"] for record in records]
+
+    if has_labels:
+        labels = [int(record["sentiments"]) for record in records]
+        return texts, labels
+    else:
+        return texts
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
