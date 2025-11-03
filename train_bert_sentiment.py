@@ -1,0 +1,104 @@
+import argparse
+import json
+import os
+from typing import Dict, List
+
+import numpy as np
+from datasets import Dataset
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments,
+                          set_seed)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Fine-tune BERT for sentiment analysis")
+    parser.add_argument("--train", type=str, default="train.json", help="Path to the training JSON file")
+    parser.add_argument("--test", type=str, default="test.json", help="Path to the testing JSON file")
+    parser.add_argument("--model", type=str, default="bert-base-uncased", help="Pretrained model checkpoint to use")
+    parser.add_argument("--output_dir", type=str, default="bert-sentiment-output", help="Directory to save the model and logs")
+    parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--learning_rate", type=float, default=2e-5, help="Learning rate")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    return parser.parse_args()
+
+
+def load_json_dataset(path: str) -> Dataset:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Could not find dataset at {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        records: List[Dict[str, str]] = json.load(f)
+
+    texts = [record["reviews"] for record in records]
+    labels = [int(record["sentiments"]) for record in records]
+
+    return Dataset.from_dict({"text": texts, "label": labels})
+
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average="binary")
+    acc = accuracy_score(labels, predictions)
+    return {"accuracy": acc, "precision": precision, "recall": recall, "f1": f1}
+
+
+def main():
+    args = parse_args()
+    set_seed(args.seed)
+
+    train_dataset = load_json_dataset(args.train)
+    test_dataset = load_json_dataset(args.test)
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], truncation=True)
+
+    tokenized_train = train_dataset.map(tokenize_function, batched=True)
+    tokenized_test = test_dataset.map(tokenize_function, batched=True)
+
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    model = AutoModelForSequenceClassification.from_pretrained(args.model, num_labels=2)
+
+    training_args = TrainingArguments(
+        output_dir=args.output_dir,
+        learning_rate=args.learning_rate,
+        per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.batch_size,
+        num_train_epochs=args.epochs,
+        weight_decay=0.01,
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        metric_for_best_model="f1",
+        greater_is_better=True,
+        logging_dir=os.path.join(args.output_dir, "logs"),
+        logging_steps=50,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_train,
+        eval_dataset=tokenized_test,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+    )
+
+    trainer.train()
+    metrics = trainer.evaluate(tokenized_test)
+    print("Test metrics:")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
+
+    trainer.save_model(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
+
+
+if __name__ == "__main__":
+    main()
