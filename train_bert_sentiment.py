@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
+import pandas as pd
 from datasets import Dataset
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import (
@@ -153,6 +154,36 @@ def main():
 
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
+
+    # ---- Generate predictions on test.json and save to CSV ----
+    print("\nGenerating predictions on test.json...")
+
+    # Get model predictions (logits) for test dataset
+    preds = trainer.predict(tokenized_test)
+    logits = preds.predictions
+
+    # Convert logits to predicted sentiment labels (0 or 1)
+    predicted_labels = np.argmax(logits, axis=-1)
+
+    # Reload original test.json to get review texts
+    with open(args.test, "r", encoding="utf-8") as f:
+        test_records = json.load(f)
+
+    # Make sure lengths match
+    assert len(test_records) == len(predicted_labels), "Mismatch between test samples and predictions!"
+
+    # Create DataFrame of results
+    df = pd.DataFrame({
+        "review_id": range(len(test_records)),
+        "review_text": [r["reviews"] for r in test_records],
+        "predicted_sentiment": predicted_labels
+    })
+
+    # Save CSV into the same output directory (renamed to results.csv)
+    output_csv_path = os.path.join(args.output_dir, "results.csv")
+    df.to_csv(output_csv_path, index=False, encoding="utf-8")
+
+    print(f"\n✅ Predictions saved to {output_csv_path}")
 
 
 if __name__ == "__main__":
