@@ -71,23 +71,29 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    #train_dataset = load_json_dataset(args.train)
-    #test_dataset = load_json_dataset(args.test)
-
+    # 1) load train (with labels) and test (without)
     train_texts, train_labels = load_json_dataset(args.train, has_labels=True)
     test_texts = load_json_dataset(args.test, has_labels=False)
 
+    # 2) build HF Datasets from raw lists
+    train_dataset = Dataset.from_dict({"text": train_texts, "label": train_labels})
+    test_dataset = Dataset.from_dict({"text": test_texts})
 
+    # 3) tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
     def tokenize_function(examples):
         return tokenizer(examples["text"], truncation=True, max_length=args.max_length)
 
+    # 4) tokenize both
     tokenized_train = train_dataset.map(tokenize_function, batched=True)
     tokenized_test = test_dataset.map(tokenize_function, batched=True)
 
     # The Trainer API expects columns named "input_ids", "attention_mask", and "label".
+    # 5) remove text col (Trainer wants input_ids, attention_mask, label)
     tokenized_train = tokenized_train.remove_columns([column for column in tokenized_train.column_names if column == "text"])
+    
+    # test has no label, so we only remove text there
     tokenized_test = tokenized_test.remove_columns([column for column in tokenized_test.column_names if column == "text"])
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -110,11 +116,12 @@ def main():
         logging_steps=50,
     )
 
+    # ❗ since test has no labels, use train as eval for now
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_train,
-        eval_dataset=tokenized_test,
+        eval_dataset=tokenized_train,  # <- was tokenized_test, but that had no labels
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
