@@ -71,8 +71,12 @@ def main():
     args = parse_args()
     set_seed(args.seed)
 
-    train_dataset = load_json_dataset(args.train)
-    test_dataset = load_json_dataset(args.test)
+    #train_dataset = load_json_dataset(args.train)
+    #test_dataset = load_json_dataset(args.test)
+
+    train_texts, train_labels = load_json_dataset(args.train, has_labels=True)
+    test_texts = load_json_dataset(args.test, has_labels=False)
+
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
 
