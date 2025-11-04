@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.ipynb_checkpoints/
+.DS_Store
+
+# --- Virtual environments ---
+venv/
+ENV/
+env/
+.venv/
+*.egg-info/
+
+# --- Model outputs & caches ---
+bert-sentiment-output*/checkpoint-*/
+bert-sentiment-output*/model.safetensors
+bert-sentiment-output*/training_args.bin
+bert-sentiment-output*/pytorch_model.bin
+bert-sentiment-output*/runs/
+bert-sentiment-output*/logs/
+
+# --- Hugging Face cache ---
+.cache/
+~/.cache/
+~/.huggingface/
+transformers_cache/
+
+# --- Data files (if temporary or large) ---
+*.csv
+*.jsonl
+!train.json
+!test.json
+!bert-sentiment-output*/*.csv
+!bert-sentiment-output*/*.json
+
+# --- IDEs and misc ---
+.vscode/
+.idea/
+*.swp
+
