@@ -35,19 +35,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
 
-
-'''def load_json_dataset(path: str) -> Dataset:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Could not find dataset at {path}")
-
-    with open(path, "r", encoding="utf-8") as f:
-        records: List[Dict[str, str]] = json.load(f)
-
-    texts = [record["reviews"] for record in records]
-    labels = [int(record["sentiments"]) for record in records]
-
-    return Dataset.from_dict({"text": texts, "label": labels})
-'''
 def load_json_dataset(path, has_labels=True):
     with open(path) as f:
         records = json.load(f)
@@ -130,21 +117,48 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    # ---- TRAINING ----
     train_result = trainer.train()
     train_metrics = train_result.metrics if train_result.metrics is not None else {}
-    train_metrics = {k: float(v) for k, v in train_metrics.items() if isinstance(v, (int, float))}
 
-    eval_metrics = trainer.evaluate(tokenized_test)
-    eval_metrics = {k: float(v) for k, v in eval_metrics.items() if isinstance(v, (int, float))}
+    # Compute metrics on the training set for accuracy, precision, recall, F1
+    train_eval = trainer.evaluate(tokenized_train)
+    train_metrics.update({
+        "train_loss": float(train_result.training_loss) if hasattr(train_result, "training_loss") else float(train_metrics.get("train_loss", 0)),
+        "train_accuracy": float(train_eval.get("eval_accuracy", 0)),
+        "train_precision": float(train_eval.get("eval_precision", 0)),
+        "train_recall": float(train_eval.get("eval_recall", 0)),
+        "train_f1": float(train_eval.get("eval_f1", 0)),
+        "train_runtime": float(train_metrics.get("train_runtime", 0)),
+        "train_samples_per_second": float(train_metrics.get("train_samples_per_second", 0)),
+        "train_steps_per_second": float(train_metrics.get("train_steps_per_second", 0)),
+        "epoch": float(train_metrics.get("epoch", 0)),
+    })
 
-    print("Training metrics:")
+    print("\n📊 Training metrics:")
     for key, value in train_metrics.items():
-        print(f"{key}: {value}")
+        print(f"{key}: {value:.4f}" if isinstance(value, (int, float)) else f"{key}: {value}")
 
-    print("\nTest metrics:")
+
+    # ---- TESTING ----
+    eval_result = trainer.evaluate(tokenized_test)
+    eval_metrics = {
+        "eval_loss": float(eval_result.get("eval_loss", 0)),
+        "eval_accuracy": float(eval_result.get("eval_accuracy", 0)),
+        "eval_precision": float(eval_result.get("eval_precision", 0)),
+        "eval_recall": float(eval_result.get("eval_recall", 0)),
+        "eval_f1": float(eval_result.get("eval_f1", 0)),
+        "eval_runtime": float(eval_result.get("eval_runtime", 0)),
+        "eval_samples_per_second": float(eval_result.get("eval_samples_per_second", 0)),
+        "eval_steps_per_second": float(eval_result.get("eval_steps_per_second", 0)),
+        "epoch": float(eval_result.get("epoch", 0)),
+    }
+
+    print("\n📈 Test metrics:")
     for key, value in eval_metrics.items():
-        print(f"{key}: {value}")
+        print(f"{key}: {value:.4f}" if isinstance(value, (int, float)) else f"{key}: {value}")
 
+    ## ---- SAVE TO FILES ----
     metrics_dir = Path(args.output_dir)
     metrics_dir.mkdir(parents=True, exist_ok=True)
     with open(metrics_dir / "train_metrics.json", "w", encoding="utf-8") as f:
