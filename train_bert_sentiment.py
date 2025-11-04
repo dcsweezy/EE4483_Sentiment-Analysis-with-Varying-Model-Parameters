@@ -140,60 +140,24 @@ def main():
         print(f"{key}: {value:.4f}" if isinstance(value, (int, float)) else f"{key}: {value}")
 
 
-    # ---- TESTING ----
-    eval_result = trainer.evaluate(tokenized_test)
-    eval_metrics = {
-        "eval_loss": float(eval_result.get("eval_loss", 0)),
-        "eval_accuracy": float(eval_result.get("eval_accuracy", 0)),
-        "eval_precision": float(eval_result.get("eval_precision", 0)),
-        "eval_recall": float(eval_result.get("eval_recall", 0)),
-        "eval_f1": float(eval_result.get("eval_f1", 0)),
-        "eval_runtime": float(eval_result.get("eval_runtime", 0)),
-        "eval_samples_per_second": float(eval_result.get("eval_samples_per_second", 0)),
-        "eval_steps_per_second": float(eval_result.get("eval_steps_per_second", 0)),
-        "epoch": float(eval_result.get("epoch", 0)),
-    }
-
-    print("\n📈 Test metrics:")
-    for key, value in eval_metrics.items():
-        print(f"{key}: {value:.4f}" if isinstance(value, (int, float)) else f"{key}: {value}")
-
-    ## ---- SAVE TO FILES ----
-    metrics_dir = Path(args.output_dir)
-    metrics_dir.mkdir(parents=True, exist_ok=True)
-    with open(metrics_dir / "train_metrics.json", "w", encoding="utf-8") as f:
-        json.dump(train_metrics, f, indent=2)
-    with open(metrics_dir / "test_metrics.json", "w", encoding="utf-8") as f:
-        json.dump(eval_metrics, f, indent=2)
-
-    trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
-
-
-    # ---- Generate predictions on test.json and save to CSV ----
-    print("\nGenerating predictions on test.json...")
-
-    # run model on test set
+    # ---- TESTING (prediction only, no accuracy/F1) ----
+    print("\n📈 Generating predictions on unseen test data...")
     preds = trainer.predict(tokenized_test)
-    logits = preds.predictions  # shape: (num_examples, 2)
-
-    # turn logits into probabilities
-    # softmax over axis=1
-    exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))  # for numerical stability
-    probs = exp_logits / exp_logits.sum(axis=1, keepdims=True)  # shape: (num_examples, 2)
-
-    # predicted class = argmax
+    logits = preds.predictions
     predicted_labels = np.argmax(logits, axis=-1)
 
-    # confidence = probability of the predicted class
+    # Optional: compute softmax confidence
+    exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+    probs = exp_logits / exp_logits.sum(axis=1, keepdims=True)
     confidence = probs[np.arange(len(predicted_labels)), predicted_labels]
 
-    # reload original test.json to get texts
+    # Reload original test.json to get texts
     with open(args.test, "r", encoding="utf-8") as f:
         test_records = json.load(f)
 
-    assert len(test_records) == len(predicted_labels)
+    assert len(test_records) == len(predicted_labels), "Mismatch between test data and predictions!"
 
+    # Save predictions to CSV
     df = pd.DataFrame({
         "review_id": range(len(test_records)),
         "review_text": [r["reviews"] for r in test_records],
@@ -203,7 +167,22 @@ def main():
 
     output_csv_path = os.path.join(args.output_dir, "results.csv")
     df.to_csv(output_csv_path, index=False, encoding="utf-8")
-    print(f"\n✅ Predictions with confidence saved to {output_csv_path}")
+    print(f"✅ Predictions with confidence saved to {output_csv_path}")
+
+    # ---- SAVE TRAINING METRICS ----
+    metrics_dir = Path(args.output_dir)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    with open(metrics_dir / "train_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(train_metrics, f, indent=2)
+
+    # Optional: record that test set is unlabeled
+    test_info = {"message": "Predictions generated on unlabeled test set", "num_samples": len(test_records)}
+    with open(metrics_dir / "test_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(test_info, f, indent=2)
+
+    # ---- SAVE MODEL AND TOKENIZER ----
+    trainer.save_model(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
 
 if __name__ == "__main__":
     main()
