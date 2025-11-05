@@ -42,3 +42,25 @@ transformers_cache/
 .idea/
 *.swp
 
+
+# === Added to ignore large model files and training artefacts ===
+# ML / HuggingFace checkpoints
+checkpoint-*/
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# Trainer / run artefacts
+runs/
+**/runs/
+*.log
+*.tmp
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Python cache files
+__pycache__/
+*.pyc
