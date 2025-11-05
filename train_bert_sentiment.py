@@ -15,8 +15,8 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
+    EarlyStoppingCallback
 )
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fine-tune BERT for sentiment analysis")
@@ -97,22 +97,22 @@ def main():
         weight_decay=0.01,
         logging_dir=os.path.join(args.output_dir, "logs"),
         logging_steps=50,
-        #evaluation_strategy="epoch",  # keep this one
-        # save_strategy="epoch",
-        # load_best_model_at_end=True,
-        # metric_for_best_model="f1",
-        # greater_is_better=True,
+        evaluation_strategy="epoch",  # keep this one
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        metric_for_best_model="f1",
+        greater_is_better=True,
     )
 
-    # ❗ since test has no labels, use train as eval for now
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_train,
-        eval_dataset=tokenized_train,  # <- was tokenized_test, but that had no labels
+        eval_dataset=tokenized_train, 
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
