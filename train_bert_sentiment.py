@@ -165,7 +165,7 @@ def main():
         "confidence": confidence,
     })
 
-    output_csv_path = os.path.join(args.output_dir, "results.csv")
+    output_csv_path = os.path.join(args.output_dir, "submission.csv")
     df.to_csv(output_csv_path, index=False, encoding="utf-8")
     print(f"✅ Predictions with confidence saved to {output_csv_path}")
 
