@@ -1,0 +1,10 @@
+=== Prediction Summary ===
+predicted_sentiment
+1    0.867639
+0    0.132361
+Name: proportion, dtype: float64
+
+Average confidence: 0.9932
+Std dev confidence: 0.0368
+
+Average prediction entropy: 0.0060
