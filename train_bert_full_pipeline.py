@@ -60,21 +60,17 @@ def compute_metrics(eval_pred):
 
 
 class WeightedTrainer(Trainer):
-    """
-    Trainer that applies class-weighted cross entropy.
-    """
-
     def __init__(self, class_weights: torch.Tensor = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels")
         outputs = model(**inputs)
         logits = outputs.get("logits")
         if labels is not None:
             loss_fct = torch.nn.CrossEntropyLoss(weight=self.class_weights.to(logits.device))
-            loss = loss_fct(logits.view(-1, model.config.num_labels), labels.view(-1))
+            loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         else:
             loss = outputs["loss"]
         return (loss, outputs) if return_outputs else loss
